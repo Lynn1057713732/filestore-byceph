@@ -53,7 +53,8 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		newFile.Seek(0, 0)
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
-		meta.UpdateFileMeta(fileMeta)
+		//meta.UpdateFileMeta(fileMeta)
+		_ = meta.UpdateFileMetaDB(fileMeta)
 
 		http.Redirect(w, r, "/file/upload/success", http.StatusFound)
 
@@ -75,7 +76,12 @@ func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
 
 	filehash := r.Form["filehash"][0]
 
-	fMetaResult := meta.GetFileMeta(filehash)
+	//fMetaResult := meta.GetFileMeta(filehash)
+	fMetaResult, err := meta.GetFileMetaDB(filehash)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	data, err := json.Marshal(fMetaResult)
 	if err != nil{
@@ -90,7 +96,12 @@ func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	limitCnt, _ := strconv.Atoi(r.Form.Get("limit"))
-	fileMetas := meta.GetLastFileMetas(limitCnt)
+	//fileMetas := meta.GetListFileMetas(limitCnt)
+	fileMetas, err := meta.GetListFileMetasDB(limitCnt)
+	if err != nil{
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	data, err := json.Marshal(fileMetas)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -145,6 +156,7 @@ func FileMetaUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	curFileMeta := meta.GetFileMeta(fileSha1)
 	curFileMeta.FileName = newFileName
 	meta.UpdateFileMeta(curFileMeta)
+
 
 	// TODO: 更新文件表中的元信息记录
 
