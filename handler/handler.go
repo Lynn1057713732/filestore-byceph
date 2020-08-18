@@ -94,7 +94,6 @@ func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
 
 func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-
 	limitCnt, _ := strconv.Atoi(r.Form.Get("limit"))
 	//fileMetas := meta.GetListFileMetas(limitCnt)
 	fileMetas, err := meta.GetListFileMetasDB(limitCnt)
