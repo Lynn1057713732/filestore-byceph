@@ -55,7 +55,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.UpdateFileMetaDB(fileMeta)
-
+		//使用重定向
 		http.Redirect(w, r, "/file/upload/success", http.StatusFound)
 
 	}
