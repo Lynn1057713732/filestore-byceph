@@ -14,6 +14,8 @@ import (
 	"filestore-byceph/meta"
 )
 
+
+//UploadHandler:处理用户注册请求
 func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		//返回上传html页面
