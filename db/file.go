@@ -53,6 +53,7 @@ func GetFileMeta(filehash string) (*TableFile, error) {
 	defer stmt.Close()
 
 	tfile := TableFile{}
+	//确保QueryRow之后调用Scan方法，否则持有的数据库链接不会被释放
 	err = stmt.QueryRow(filehash).Scan(
 		&tfile.FileHash, &tfile.FileAddr, &tfile.FileName, &tfile.FileSize)
 	if err != nil {
@@ -99,4 +100,54 @@ func GetFileMetaList(limit int) ([]TableFile, error) {
 	}
 	fmt.Println(len(tfiles))
 	return tfiles, nil
+}
+
+func UpdateFileMetaByFileHash(filehash string, filename string)(bool, error) {
+	stmt, err := mydb.DBConn().Prepare(
+		"Update tbl_file SET file_name=? where tbl_file.file_sha1 = ?")
+	if err != nil {
+		fmt.Println(err.Error())
+		return false, err
+	}
+	defer stmt.Close()
+
+	result, err := stmt.Exec(filename, filehash)
+	if err != nil {
+		fmt.Printf("update faied, error:[%v]", err.Error())
+		return false, err
+	}
+	n, err := result.RowsAffected() // 操作影响的行数
+	if err != nil {
+		fmt.Printf("get RowsAffected failed, err:%v\n", err)
+		return false, err
+	}
+	fmt.Printf("update success, affected rows:%d\n", n)
+
+	return true, nil
+
+}
+
+func DeleteFileMetaByFileHash(filehash string)(bool, error) {
+	stmt, err := mydb.DBConn().Prepare(
+		"Update tbl_file SET status=? where tbl_file.file_sha1 = ?")
+	if err != nil {
+		fmt.Println(err.Error())
+		return false, err
+	}
+	defer stmt.Close()
+
+	result, err := stmt.Exec(2, filehash)
+	if err != nil {
+		fmt.Printf("dalete faied, error:[%v]", err.Error())
+		return false, err
+	}
+	n, err := result.RowsAffected() // 操作影响的行数
+	if err != nil {
+		fmt.Printf("get RowsAffected failed, err:%v\n", err)
+		return false, err
+	}
+	fmt.Printf("datele success, affected rows:%d\n", n)
+
+	return true, nil
+
 }

@@ -54,7 +54,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		newFile.Seek(0, 0)
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
 		//meta.UpdateFileMeta(fileMeta)
-		_ = meta.UpdateFileMetaDB(fileMeta)
+		_ = meta.CreateFileMetaDB(fileMeta)
 		//使用重定向
 		http.Redirect(w, r, "/file/upload/success", http.StatusFound)
 
@@ -113,7 +113,12 @@ func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 func DownloadHandler(w http.ResponseWriter, r *http.Request){
 	r.ParseForm()
 	fsha1 := r.Form.Get("filehash")
-	fm := meta.GetFileMeta(fsha1)
+	fm,err := meta.GetFileMetaDB(fsha1)
+	if err != nil{
+		fmt.Printf("No This File, err: %s", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	f, err := os.Open(fm.Location)
 	if err != nil{
@@ -152,33 +157,57 @@ func FileMetaUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	curFileMeta := meta.GetFileMeta(fileSha1)
-	curFileMeta.FileName = newFileName
-	meta.UpdateFileMeta(curFileMeta)
-
-
-	// TODO: 更新文件表中的元信息记录
-
-	data, err := json.Marshal(curFileMeta)
-	if err != nil {
+	curFileMeta, err := meta.GetFileMetaDB(fileSha1)
+	if err != nil{
+		fmt.Printf("No This File, err: %s", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+
+	curFileMeta.FileName = newFileName
+	ret := meta.UpdateFileMetaDB(*curFileMeta)
+	if ret == true{
+		data, err := json.Marshal(curFileMeta)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+	} else {
+		data, err := json.Marshal("update filed!")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(data)
+	}
+
 }
 
 // FileDeleteHandler : 删除文件及元信息
 func FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	fileSha1 := r.Form.Get("filehash")
+	if r.Method != "DELETE" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
-	fMeta := meta.GetFileMeta(fileSha1)
+	fMeta,err := meta.GetFileMetaDB(fileSha1)
+	if err != nil {
+		fmt.Printf("No This File, err: %s", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	// 删除文件
 	os.Remove(fMeta.Location)
 	// 删除文件元信息
-	meta.RemoveFileMeta(fileSha1)
-	// TODO: 删除表文件信息
+	res, err := meta.RemoveFileMetaDB(fileSha1)
+	if res != true{
+		w.WriteHeader(http.StatusBadRequest)
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

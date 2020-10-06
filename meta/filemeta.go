@@ -1,8 +1,8 @@
 package meta
 
 import (
-	"sort"
 	mydb "filestore-byceph/db"
+	"fmt"
 )
 
 //FileMeta：文件元信息结构体
@@ -14,28 +14,29 @@ type FileMeta struct {
 	UploadAt string
 }
 
-var fileMetas map[string]FileMeta
+//var fileMetas map[string]FileMeta
+//
+//func init() {
+//	fileMetas = make(map[string]FileMeta)
+//}
 
-func init() {
-	fileMetas = make(map[string]FileMeta)
-}
 
-//UpdateFileMeta：新增、更新文件元信息
-func UpdateFileMeta(fmeta FileMeta) {
-	fileMetas[fmeta.FileSha1] = fmeta
-
-}
-
-// UpdateFileMetaDB : 新增/更新文件元信息到mysql中
-func UpdateFileMetaDB(fmeta FileMeta) bool{
+// CreateFileMetaDB : 新增文件元信息到mysql中
+func CreateFileMetaDB(fmeta FileMeta) bool{
 	return mydb.OnFileUploadFinished(
 		fmeta.FileSha1, fmeta.FileName, fmeta.FileSize, fmeta.Location)
 }
 
-//GetFileMeta：通过sha1值获取文件的元信息对象
-func GetFileMeta(fileSha1 string) FileMeta{
-	return fileMetas[fileSha1]
+// UpdateFileMetaDB : 更新文件元信息到mysql中
+func UpdateFileMetaDB(fmeta FileMeta) bool{
+	ret, err := mydb.UpdateFileMetaByFileHash(fmeta.FileSha1, fmeta.FileName)
+	if err != nil{
+		fmt.Printf("update file meta error: %s", err.Error())
+
+	}
+	return ret
 }
+
 
 // GetFileMetaDB : 从mysql获取文件元信息
 func GetFileMetaDB(fileSha1 string) (*FileMeta, error) {
@@ -52,22 +53,13 @@ func GetFileMetaDB(fileSha1 string) (*FileMeta, error) {
 	return &fmeta, nil
 }
 
-// RemoveFileMeta : 删除元信息
-func RemoveFileMeta(fileSha1 string) {
-	delete(fileMetas, fileSha1)
+// 删除元信息
+func RemoveFileMetaDB(fileSha1 string) (bool, error){
+	res, err := mydb.DeleteFileMetaByFileHash(fileSha1)
+	return res, err
+
 }
 
-
-// GetListFileMetas : 获取批量的文件元信息列表
-func GetListFileMetas(count int) []FileMeta {
-	fMetaArray := make([]FileMeta, len(fileMetas))
-	for _, v := range fileMetas {
-		fMetaArray = append(fMetaArray, v)
-	}
-
-	sort.Sort(ByUploadTime(fMetaArray))
-	return fMetaArray[0:count]
-}
 
 // GetListFileMetasDB : 批量从mysql获取文件元信息
 func GetListFileMetasDB(limit int) ([]FileMeta, error) {
