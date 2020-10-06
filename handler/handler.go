@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"filestore-byceph/meta"
+	dao "filestore-byceph/db"
 )
 
 
-//UploadHandler:处理用户注册请求
+//UploadHandler:处理文件上传
 func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		//返回上传html页面
@@ -57,8 +58,23 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.CreateFileMetaDB(fileMeta)
-		//使用重定向
-		http.Redirect(w, r, "/file/upload/success", http.StatusFound)
+
+		//更新用户文件表
+		r.ParseForm()
+		username := r.Form.Get("username")
+		fmt.Printf("username: %s", username)
+
+		suc := dao.OnUserFileUploadFinished(username, fileMeta.FileSha1,
+			fileMeta.FileName, fileMeta.FileSize)
+		fmt.Printf("%b", suc)
+		if suc {
+			//使用重定向
+			http.Redirect(w, r, "/file/upload/success", http.StatusFound)
+		} else {
+			w.Write([]byte("Upload Failed!"))
+
+		}
+
 
 	}
 
@@ -98,12 +114,14 @@ func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	limitCnt, _ := strconv.Atoi(r.Form.Get("limit"))
 	//fileMetas := meta.GetListFileMetas(limitCnt)
-	fileMetas, err := meta.GetListFileMetasDB(limitCnt)
+	//fileMetas, err := meta.GetListFileMetasDB(limitCnt)
+	username := r.Form.Get("username")
+	userFiles, err := dao.QueryFileMetas(username, limitCnt)
 	if err != nil{
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	data, err := json.Marshal(fileMetas)
+	data, err := json.Marshal(userFiles)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -212,4 +230,54 @@ func FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+//TryFastUploadHandler:尝试秒传接口
+func TryFastUploadHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	//解析参数
+	username := r.Form.Get("username")
+	filehash := r.Form.Get("filehash")
+	filename := r.Form.Get("filename")
+	filesize, _ := strconv.Atoi(r.Form.Get("filesize"))
+
+	//从文件表中查询相同hash的文件记录
+	fileMeta, err := meta.GetFileMetaDB(filehash)
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	//查询不到记录则返回查询失败
+	if fileMeta == nil {
+		resp := utils.RespMsg{
+			Code: -1,
+			Msg: "秒传失败，请访问普通接口！",
+		}
+		w.Write(resp.JSONBytes())
+		return
+	}
+
+	//查询到就将文件信息写入用户文件表，返回成功即可
+	suc := dao.OnUserFileUploadFinished(username, filehash, filename, int64(filesize))
+
+	if suc {
+		resp := utils.RespMsg{
+			Code: 0,
+			Msg: "秒传成功！",
+		}
+		w.Write(resp.JSONBytes())
+		return
+	} else {
+		resp := utils.RespMsg{
+			Code: -2,
+			Msg: "秒传失败，请稍后重试！",
+		}
+		w.Write(resp.JSONBytes())
+		return
+	}
+
+
 }
