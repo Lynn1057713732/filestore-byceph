@@ -17,6 +17,18 @@ func main() {
 
 	http.HandleFunc("/file/fastupload", handler.HTTPInterceptor(handler.TryFastUploadHandler))
 
+	//分块上传接口
+	// 初始化分块信息
+	http.HandleFunc("/file/mpupload/init",handler.HTTPInterceptor(handler.InitialMultipartUploadHandler))
+	// 上传分块
+	http.HandleFunc("/file/mpupload/uppart",handler.HTTPInterceptor(handler.UploadPartHandler))
+	// 通知分块上传完成
+	http.HandleFunc("/file/mpupload/complete",handler.HTTPInterceptor(handler.CompleteUploadHandler))
+	// 取消上传分块
+	http.HandleFunc("/file/mpupload/cancel",handler.HTTPInterceptor(handler.CancelUploadPartHandler))
+	// 查看分块上传的整体状态
+	http.HandleFunc("/file/mpupload/status",handler.HTTPInterceptor(handler.MultipartUploadStatusHandler))
+
 	http.HandleFunc("/user/signup", handler.SignUpHandler)
 	http.HandleFunc("/user/signin", handler.SignInHandler)
 	http.HandleFunc("/user/info", handler.HTTPInterceptor(handler.UserInfoHandler))
