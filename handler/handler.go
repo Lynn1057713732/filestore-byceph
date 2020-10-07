@@ -12,9 +12,11 @@ import (
 	"strconv"
 	"time"
 
+
 	cfg "filestore-byceph/config"
 	"filestore-byceph/meta"
 	dao "filestore-byceph/db"
+	"filestore-byceph/store/oss"
 )
 
 
@@ -66,6 +68,15 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		cephPath := cfg.CephRootDir + fileMeta.FileSha1
 		_ = ceph.PutObject("userfile", cephPath, data)
 		fileMeta.Location = cephPath
+
+		// 文件写入OSS存储
+		ossPath := cfg.OSSRootDir + fileMeta.FileSha1
+		err = oss.Bucket().PutObject(ossPath, newFile)
+		if err != nil {
+			w.Write([]byte("Upload Failed!"))
+			return
+		}
+		fileMeta.Location = ossPath
 
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.CreateFileMetaDB(fileMeta)
@@ -289,6 +300,22 @@ func TryFastUploadHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp.JSONBytes())
 		return
 	}
+
+}
+
+
+// DownloadURLHandler : 生成文件的下载地址
+func DownloadURLHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	filehash := r.Form.Get("filehash")
+
+	//从文件表中查找
+	row, _ := dao.GetFileMeta(filehash)
+
+	//Todo:判断文件是存在OSS中还是Ceph中
+
+	signURL := oss.DownloadURL(row.FileAddr.String)
+	w.Write([]byte(signURL))
 
 
 }

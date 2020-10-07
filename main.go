@@ -29,6 +29,9 @@ func main() {
 	// 查看分块上传的整体状态
 	http.HandleFunc("/file/mpupload/status",handler.HTTPInterceptor(handler.MultipartUploadStatusHandler))
 
+	//获取oss下载地址
+	http.HandleFunc("/file/downloadurl",handler.HTTPInterceptor(handler.DownloadURLHandler))
+
 	http.HandleFunc("/user/signup", handler.SignUpHandler)
 	http.HandleFunc("/user/signin", handler.SignInHandler)
 	http.HandleFunc("/user/info", handler.HTTPInterceptor(handler.UserInfoHandler))
