@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"filestore-byceph/store/ceph"
 	"filestore-byceph/utils"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	cfg "filestore-byceph/config"
 	"filestore-byceph/meta"
 	dao "filestore-byceph/db"
 )
@@ -56,6 +58,15 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		newFile.Seek(0, 0)
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
+
+
+		//同时将文件写入ceph存储中
+		newFile.Seek(0, 0)
+		data, _ := ioutil.ReadAll(newFile)
+		cephPath := cfg.CephRootDir + fileMeta.FileSha1
+		_ = ceph.PutObject("userfile", cephPath, data)
+		fileMeta.Location = cephPath
+
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.CreateFileMetaDB(fileMeta)
 
