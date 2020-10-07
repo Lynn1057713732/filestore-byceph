@@ -62,5 +62,6 @@ func GenFileMeta(metas map[string]string) []oss.Option {
 	for k, v := range metas {
 		options = append(options, oss.Meta(k, v))
 	}
+
 	return options
 }
