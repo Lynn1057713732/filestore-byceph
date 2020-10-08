@@ -1,12 +1,12 @@
 package handler
 
 import (
+	dao "filestore-byceph/db"
 	//"encoding/json"
 	"filestore-byceph/utils"
 	"fmt"
-	"io/ioutil"
+	"github.com/gin-gonic/gin"
 	"net/http"
-	dao "filestore-byceph/db"
 	"time"
 )
 
@@ -14,42 +14,51 @@ const (
 	userPasswordSalt = "!#FDGS@#%"
 )
 
-func SignUpHandler(w http.ResponseWriter, r *http.Request) () {
-	if r.Method == http.MethodGet{
-		data, err := ioutil.ReadFile("./static/view/signup.html")
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Write(data)
-		return
+//SignUpHandler:响应注册页面
+func SignUpHandler(c *gin.Context) () {
 
-	}
-	r.ParseForm()
-	username := r.Form.Get("username")
-	passwd := r.Form.Get("passwd")
+	c.Redirect(http.StatusFound, "/static/view/signup.html")
+
+}
+
+//DoSignUpHandler:处理注册请求
+func DoSignUpHandler(c *gin.Context) {
+	username := c.Request.FormValue("username")
+	passwd := c.Request.FormValue("passwd")
 
 	if len(username) < 3 || len(passwd) < 5{
-		w.Write([]byte("Invaild Parameter"))
+		c.JSON(http.StatusOK, gin.H{
+			"msg": "Invaild Parameter",
+			"code": -1,
+		})
 		return
 	}
 
 	encode_passwd := utils.Sha1([]byte(passwd + userPasswordSalt))
+	//将用户信息注册到用户表中
 	ret := dao.UserSignUp(username, encode_passwd)
 	if ret {
-		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("Success"))
+		c.JSON(http.StatusOK, gin.H{
+			"msg": "SignUp Succeeded",
+			"code": 0,
+		})
 	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Failed"))
+		c.JSON(http.StatusOK, gin.H{
+			"msg": "SignUp Failed",
+			"code": 0,
+		})
 	}
 }
+//SignInHandler：返回登录响应页面
+func SignInHandler(c *gin.Context) {
+	c.Redirect(http.StatusFound, "/static/view/signin.html")
+}
 
-//SignInHandler：登录接口
-func SignInHandler(w http.ResponseWriter, r *http.Request) () {
-	r.ParseForm()
-	username := r.Form.Get("username")
-	passwd := r.Form.Get("passwd")
+//DoSignInHandler：登录接口
+func DoSignInHandler(c *gin.Context) {
+
+	username := c.Request.FormValue("username")
+	passwd := c.Request.FormValue("passwd")
 	//todo:校验输出参数
 
 	//加密用户输入的密码
@@ -60,8 +69,10 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) () {
 	passwdChecked := dao.UserSignIn(username, encodePassword)
 
 	if !passwdChecked {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("密码错误"))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": -1,
+			"msg": "密码错误",
+		})
 		return
 	}
 
@@ -69,12 +80,13 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) () {
 	token := GenToken(username)
 	updateTokenResult := dao.UpdateUserToken(username, token)
 	if !updateTokenResult {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("更新token失败"))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": -1,
+			"msg": "更新token失败",
+		})
 		return
 	}
-
-	response := utils.RespMsg{
+	resp := utils.RespMsg{
 		Code: 0,
 		Msg: "OK",
 		Data: struct {
@@ -85,8 +97,7 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) () {
 			Token: token,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(response.JSONBytes())
+	c.Data(http.StatusOK, "application/json", resp.JSONBytes())
 
 }
 
@@ -100,9 +111,8 @@ func GenToken(username string) string{
 }
 
 //UserInfoHandler:返回用户信息
-func UserInfoHandler(w http.ResponseWriter, r *http.Request) () {
-	r.ParseForm()
-	username := r.Form.Get("username")
+func UserInfoHandler(c *gin.Context) () {
+	username := c.Request.FormValue("username")
 	//token := r.Form.Get("token")
 	//
 	////验证token是否有效
@@ -115,7 +125,10 @@ func UserInfoHandler(w http.ResponseWriter, r *http.Request) () {
 	//查询用户信息
 	user, err := dao.GetUserInfoByToken(username)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": -1,
+			"msg": "查询不到信息",
+		})
 		return
 	}
 
@@ -125,8 +138,8 @@ func UserInfoHandler(w http.ResponseWriter, r *http.Request) () {
 		Msg: "OK",
 		Data: user,
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(resp.JSONBytes())
+	c.Data(http.StatusOK, "application/json", resp.JSONBytes())
+
 }
 
 func ValidToken(token string) bool {
