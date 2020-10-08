@@ -2,11 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	cmn "filestore-byceph/common"
+	"filestore-byceph/mq"
 	"filestore-byceph/store/ceph"
 	"filestore-byceph/utils"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -61,22 +64,46 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		newFile.Seek(0, 0)
 		fileMeta.FileSha1 = utils.FileSha1(newFile)
 
-
-		//同时将文件写入ceph存储中
-		newFile.Seek(0, 0)
-		data, _ := ioutil.ReadAll(newFile)
-		cephPath := cfg.CephRootDir + fileMeta.FileSha1
-		_ = ceph.PutObject("userfile", cephPath, data)
-		fileMeta.Location = cephPath
-
-		// 文件写入OSS存储
-		ossPath := cfg.OSSRootDir + fileMeta.FileSha1
-		err = oss.Bucket().PutObject(ossPath, newFile)
-		if err != nil {
-			w.Write([]byte("Upload Failed!"))
-			return
+		// 5. 同步或异步将文件转移到Ceph/OSS
+		newFile.Seek(0, 0) // 游标重新回到文件头部
+		if cfg.CurrentStoreType == cmn.StoreCeph {
+			// 文件写入Ceph存储
+			data, _ := ioutil.ReadAll(newFile)
+			cephPath := cfg.CephRootDir + fileMeta.FileSha1
+			_ = ceph.PutObject("userfile", cephPath, data)
+			fileMeta.Location = cephPath
+		} else if cfg.CurrentStoreType == cmn.StoreOSS {
+			// 文件写入OSS存储
+			ossPath := cfg.OSSRootDir + fileMeta.FileSha1
+			// 判断写入OSS为同步还是异步
+			if !cfg.AsyncTransferEnable {
+				// TODO: 设置oss中的文件名，方便指定文件名下载
+				err = oss.Bucket().PutObject(ossPath, newFile)
+				if err != nil {
+					log.Println(err.Error())
+					errCode = -5
+					return
+				}
+				fileMeta.Location = ossPath
+			} else {
+				// 写入异步转移任务队列
+				data := mq.TransferData{
+					FileHash:      fileMeta.FileSha1,
+					CurLocation:   fileMeta.Location,
+					DestLocation:  ossPath,
+					DestStoreType: cmn.StoreOSS,
+				}
+				pubData, _ := json.Marshal(data)
+				pubSuc := mq.Publish(
+					cfg.TransExchangeName,
+					cfg.TransOSSRoutingKey,
+					pubData,
+				)
+				if !pubSuc {
+					// TODO: 当前发送转移信息失败，稍后重试
+				}
+			}
 		}
-		fileMeta.Location = ossPath
 
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.CreateFileMetaDB(fileMeta)
